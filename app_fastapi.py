@@ -265,9 +265,12 @@ async def scrape_endpoint(request: ScrapeRequest, browser_context: tuple[Browser
         raise HTTPException(
             status_code=400, detail="Pages to scrape must be at least 1")
 
+    # urls_to_scrape = [
+    #     f'https://amazon.com/s?k={search_field}&s=exact-aware-popularity-rank',
+    #     f'https://ebay.com/sch/i.html?_nkw={search_field}'
+    # ]
     urls_to_scrape = [
-        f'https://amazon.com/s?k={search_field}&s=exact-aware-popularity-rank',
-        f'https://ebay.com/sch/i.html?_nkw={search_field}'
+        f'https://amazon.com/s?k={search_field}&s=exact-aware-popularity-rank'
     ]
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     csv_file = f"/usr/src/app/output/scraped_{search_field}_{timestamp}.csv"
