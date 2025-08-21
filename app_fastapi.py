@@ -14,6 +14,8 @@ from playwright.sync_api import sync_playwright
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+
 
 # ------------------ Setup ------------------
 locale.setlocale(locale.LC_ALL, "")
