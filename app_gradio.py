@@ -119,10 +119,11 @@ def scrape_website(target_url: str, headers: dict = None, pages: int = 1, sleep_
 
 def save_to_csv(data: list[dict], filename: str):
     if not data:
-        return
+        return None
 
-    output_dir = "/usr/src/app/output"
-    os.makedirs(output_dir, exist_ok=True)  # ✅ create folder if missing
+    # ✅ Always use /tmp for Cloud Run / GCP containers
+    output_dir = "/tmp/output"
+    os.makedirs(output_dir, exist_ok=True)
 
     output_path = os.path.join(output_dir, filename)
     keys = data[0].keys()
@@ -132,18 +133,34 @@ def save_to_csv(data: list[dict], filename: str):
         writer.writeheader()
         writer.writerows(data)
 
-    return output_path  # return path for confirmation
-
+    return output_path  # return path so you know where it is
 # def save_to_csv(data: list[dict], filename: str):
 #     if not data:
 #         return
-#     output_path = os.path.join('/usr/src/app/output', filename)
+
+#     output_dir = "/usr/src/app/output"
+#     os.makedirs(output_dir, exist_ok=True)  # ✅ create folder if missing
+
+#     output_path = os.path.join(output_dir, filename)
 #     keys = data[0].keys()
-#     with open(output_path, mode='w', newline='', encoding='utf-8') as file:
-#         writer = csv.writer(file)
-#         writer.writerow(keys)
-#         for row in data:
-#             writer.writerow(row.values())
+
+#     with open(output_path, mode="w", newline="", encoding="utf-8") as file:
+#         writer = csv.DictWriter(file, fieldnames=keys)
+#         writer.writeheader()
+#         writer.writerows(data)
+
+#     return output_path  # return path for confirmation
+
+# # def save_to_csv(data: list[dict], filename: str):
+# #     if not data:
+# #         return
+# #     output_path = os.path.join('/usr/src/app/output', filename)
+# #     keys = data[0].keys()
+# #     with open(output_path, mode='w', newline='', encoding='utf-8') as file:
+# #         writer = csv.writer(file)
+# #         writer.writerow(keys)
+# #         for row in data:
+# #             writer.writerow(row.values())
 
 
 def pie_graph(data: list[dict], filename: str):

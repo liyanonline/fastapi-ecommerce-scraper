@@ -1,0 +1,34 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment
+# .env
+.venv/
+env/
+venv/
+myv/
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# Test / Docs
+test/
+*.md
+
+# OS / System
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Docker files
+Dockerfile
+.dockerignore
+
+# Misc
+*.log
