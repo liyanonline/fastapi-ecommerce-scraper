@@ -5,7 +5,7 @@ import locale
 import logging
 import requests
 import numpy as np
-from bs4 import BeautifulSoup
+# from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
@@ -273,3 +273,16 @@ def scrape(request: ScrapeRequest):
         "graph_file": "scraped_data_graph.png",
         "data_preview": all_scraped_data[:5]
     }
+
+
+from fastapi.responses import FileResponse
+
+@app.get("/download/csv")
+def download_csv():
+    file_path = "scraped_data.csv"
+    return FileResponse(file_path, media_type="text/csv", filename="scraped_data.csv")
+
+@app.get("/download/graph")
+def download_graph():
+    file_path = "scraped_data_graph.png"
+    return FileResponse(file_path, media_type="image/png", filename="scraped_data_graph.png")
