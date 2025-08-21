@@ -117,23 +117,22 @@ def scrape_website(target_url: str, headers: dict = None, pages: int = 1, sleep_
     return all_data
 
 
-def save_to_csv(data: List[Dict[str, str]], output_path: str) -> None:
-    """Save scraped data to a CSV file."""
-    # Ensure the output directory exists
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+def save_to_csv(data: list[dict], filename: str):
+    if not data:
+        return
 
-    # Define headers based on expected data structure
-    # Adjust for laptop data if needed
-    headers = ['序号', '批准文号', '产品名称', '生产单位', '药品本位码', '详情']
+    output_dir = "/usr/src/app/output"
+    os.makedirs(output_dir, exist_ok=True)  # ✅ create folder if missing
 
-    try:
-        with open(output_path, mode='w', newline='', encoding='utf-8') as file:
-            writer = csv.DictWriter(file, fieldnames=headers)
-            writer.writeheader()
-            for row in data:
-                writer.writerow(row)
-    except Exception as e:
-        raise Exception(f"Failed to write CSV to {output_path}: {str(e)}")
+    output_path = os.path.join(output_dir, filename)
+    keys = data[0].keys()
+
+    with open(output_path, mode="w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=keys)
+        writer.writeheader()
+        writer.writerows(data)
+
+    return output_path  # return path for confirmation
 
 # def save_to_csv(data: list[dict], filename: str):
 #     if not data:
