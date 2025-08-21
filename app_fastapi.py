@@ -15,7 +15,7 @@ from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-
+from fastapi.staticfiles import StaticFiles
 
 # ------------------ Setup ------------------
 locale.setlocale(locale.LC_ALL, "")
@@ -33,46 +33,158 @@ remove_currency_from_csv = True
 api_url_for_currencies: dict = {}
 
 # ------------------ Utility Functions ------------------
+
 def convert_price(price_data: str, source_url: str) -> str:
     try:
-        price_data = price_data.replace(u"\xa0", " ").strip()
-        original_symbol = "".join(c for c in price_data.split()[0] if not c.isdigit() and c not in (".", ",")).strip()
+        price_data = price_data.replace(u'\xa0', ' ').strip()
+        # Extract currency symbol
+        original_symbol = ''.join(
+            c for c in price_data.split()[0] if not c.isdigit() and c not in ('.', ',')
+        ).strip()
         if not original_symbol:
-            original_symbol = "$"
-        original_currency = symbols_hash_map.get(original_symbol, "usd")
+            original_symbol = '$'
+        original_currency = symbols_hash_map.get(original_symbol, 'usd')
 
-        numeric_part = "".join(c for c in price_data if c.isdigit() or c == ".")
-        amount = float(numeric_part) if numeric_part else 0.0
+        # Handle price ranges
+        if 'to' in price_data.lower():
+            parts = price_data.lower().split('to')
+        else:
+            parts = [price_data]
+
+        numeric_values = []
+        for part in parts:
+            # Remove everything except digits and dot
+            cleaned = ''.join(c for c in part if c.isdigit() or c == '.')
+            if cleaned:
+                numeric_values.append(float(cleaned.replace(',', '')))
+
+        # Use average if range, else single value
+        amount = sum(numeric_values) / len(numeric_values) if numeric_values else 0.0
+
+        # Convert to target currency
         converted_amount = amount / api_url_for_currencies[currency][original_currency]
 
-        return f"{converted_amount:.2f}" if remove_currency_from_csv else f"{currency_symbol} {converted_amount:.2f}"
+        return (
+            f'{converted_amount:.2f}'
+            if remove_currency_from_csv
+            else f'{currency_symbol} {converted_amount:.2f}'
+        )
     except Exception as e:
         logging.warning(f"Price conversion failed for '{price_data}': {e}")
-        return "0.00"
+        return '0.00'
+
+
+
+# def convert_price(price_data: str, source_url: str) -> str:
+#     try:
+#         price_data = price_data.replace(u"\xa0", " ").strip()
+#         original_symbol = "".join(c for c in price_data.split()[0] if not c.isdigit() and c not in (".", ",")).strip()
+#         if not original_symbol:
+#             original_symbol = "$"
+#         original_currency = symbols_hash_map.get(original_symbol, "usd")
+
+#         numeric_part = "".join(c for c in price_data if c.isdigit() or c == ".")
+#         amount = float(numeric_part) if numeric_part else 0.0
+#         converted_amount = amount / api_url_for_currencies[currency][original_currency]
+
+#         return f"{converted_amount:.2f}" if remove_currency_from_csv else f"{currency_symbol} {converted_amount:.2f}"
+#     except Exception as e:
+#         logging.warning(f"Price conversion failed for '{price_data}': {e}")
+#         return "0.00"
 
 # ------------------ Scrapers ------------------
 def parse_amazon(target_url) -> List[Dict]:
-    data = []
+    data: list = []
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
         page = browser.new_page()
         page.goto(target_url)
-        try:
-            items = page.query_selector_all("div.a-section.a-spacing-small")
-            for item in items:
-                if item.query_selector("h2.a-size-mini > a > span"):
-                    item_data = {
-                        "Name": item.query_selector("h2.a-size-mini > a > span").inner_text(),
-                        "Price": convert_price(item.query_selector("span.a-price > span.a-offscreen").inner_text(), "amazon"),
-                        "Link": f"https://amazon.com{item.query_selector('h2.a-size-mini > a').get_attribute('href')}"
-                    }
-                    data.append(item_data)
-            browser.close()
-        except Exception as e:
-            logging.warning(f"Amazon parsing error: {e}")
+
+        items = page.query_selector_all('div.a-section.a-spacing-small')
+        for item in items:
+            try:
+                name_el = item.query_selector('h2.a-size-mini > a > span')
+                price_el = item.query_selector('span.a-price > span.a-offscreen')
+                link_el = item.query_selector('h2.a-size-mini > a')
+
+                if not (name_el and price_el and link_el):
+                    continue  # Skip if any critical element is missing
+
+                price = convert_price(price_el.inner_text(), 'amazon')
+                if price == '0.00':
+                    continue  # Skip malformed price
+
+                item_data = {
+                    'Name': name_el.inner_text(),
+                    'Price': price,
+                    'Link': f"https://amazon.com{link_el.get_attribute('href')}"
+                }
+                data.append(item_data)
+
+            except Exception:
+                continue  # Skip problematic items silently
+
+        browser.close()
     return data
 
+
 def parse_ebay_playwright(target_url: str) -> List[Dict]:
+    data: list = []
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(target_url, wait_until="domcontentloaded")
+
+        items = page.query_selector_all('li.s-item')
+        for item in items:
+            try:
+                title_el = item.query_selector('div.s-item__title')
+                price_el = item.query_selector('span.s-item__price')
+                link_el = item.query_selector('a.s-item__link')
+
+                if not (title_el and price_el and link_el):
+                    continue  # Skip if any critical element is missing
+
+                price = convert_price(price_el.inner_text().strip(), 'ebay')
+                if price == '0.00':
+                    continue  # Skip malformed price
+
+                item_data = {
+                    'Name': title_el.inner_text().strip(),
+                    'Price': price,
+                    'Link': link_el.get_attribute('href')
+                }
+                data.append(item_data)
+
+            except Exception:
+                continue  # Skip problematic items silently
+
+        browser.close()
+    return data
+
+
+# def parse_amazon(target_url) -> List[Dict]:
+#     data = []
+#     with sync_playwright() as pw:
+#         browser = pw.chromium.launch(headless=True)
+#         page = browser.new_page()
+#         page.goto(target_url)
+#         try:
+#             items = page.query_selector_all("div.a-section.a-spacing-small")
+#             for item in items:
+#                 if item.query_selector("h2.a-size-mini > a > span"):
+#                     item_data = {
+#                         "Name": item.query_selector("h2.a-size-mini > a > span").inner_text(),
+#                         "Price": convert_price(item.query_selector("span.a-price > span.a-offscreen").inner_text(), "amazon"),
+#                         "Link": f"https://amazon.com{item.query_selector('h2.a-size-mini > a').get_attribute('href')}"
+#                     }
+#                     data.append(item_data)
+#             browser.close()
+#         except Exception as e:
+#             logging.warning(f"Amazon parsing error: {e}")
+#     return data
+
+# def parse_ebay_playwright(target_url: str) -> List[Dict]:
     data = []
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
@@ -154,6 +266,7 @@ app = FastAPI()
 origins = [
     "https://babyshare.vercel.app",
     "http://localhost:3000",  # for local testing
+    "https://8000-cs-264799521138-default.cs-us-west1-ijlt.cloudshell.dev/"
 ]
 
 app.add_middleware(
