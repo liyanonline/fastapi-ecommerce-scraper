@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN playwright install chromium
 RUN mkdir -p /usr/src/app/output && chmod -R 777 /usr/src/app/output
 COPY . .
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app_fastapi:app", "--host", "0.0.0.0", "--port", "8000"]
 
 
 # # Use an official Python runtime as a parent image
