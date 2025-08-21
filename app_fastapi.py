@@ -12,6 +12,9 @@ import matplotlib.pyplot as plt
 from fastapi import FastAPI, Query
 from pydantic import BaseModel
 from typing import List, Dict, Optional
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
 
 # ------------------ Setup ------------------
 locale.setlocale(locale.LC_ALL, '')
@@ -229,6 +232,30 @@ def pie_graph(data: List[Dict], filename: str):
 
 # ------------------ FastAPI ------------------
 app = FastAPI()
+
+
+
+
+
+# Allow your frontend domain
+origins = [
+    "https://babyshare.vercel.app",
+    "http://localhost:3000",  # for local testing
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,          # domains allowed
+    allow_credentials=True,
+    allow_methods=["*"],            # GET, POST, etc.
+    allow_headers=["*"],            # headers like Content-Type
+)
+
+
+
+
+
+app.mount("/files", StaticFiles(directory="."), name="files")
 
 
 class ScrapeRequest(BaseModel):
