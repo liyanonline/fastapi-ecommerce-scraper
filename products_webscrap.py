@@ -32,30 +32,50 @@ symbols_hash_map: dict = {
     '₿': 'btc'
 }  # supported currencies, used to convert from symbols to currency code and vice versa
 
+# def convert_price(price_data:str, source_url:str) -> str | None:
+#     original_symbol:str = ''.join([symbol for symbol in price_data if not symbol.isdigit() and symbol not in ('.', ',', 'a', 'to')])[:2]
+#     original_currency:str = symbols_hash_map[original_symbol]
+#     value_without_symbol:str = price_data.replace(original_symbol, '')
+#     if remove_currency_from_csv:
+#         if 'aliexpress' == source_url:
+#             return f'{locale.atof(value_without_symbol)/api_url_for_currencies[currency][original_currency]:.2f}'
+#         if 'ebay' == source_url:
+#             price_value:list[str] = value_without_symbol.replace(' ', '').replace('a', ';').replace('to', ';').replace(u'\xa0', '').split(';')
+#             return ', '.join(map(lambda x: f"{locale.atof(x)/api_url_for_currencies[currency][original_currency]:.2f}", price_value))
+#         if 'amazon' == source_url:
+#             return f"{float(value_without_symbol if ',' not in value_without_symbol else value_without_symbol.replace(',', ''))/api_url_for_currencies[currency][original_currency]:.2f}"
+#     else:
+#         if 'aliexpress' == source_url:
+#             return f'{currency_symbol} {locale.atof(value_without_symbol)/api_url_for_currencies[currency][original_currency]:.2f}'
+#         if 'ebay' == source_url:
+#             price_value:list[str] = value_without_symbol.replace(' ', '').replace('a', ';').replace('to', ';').replace(u'\xa0', '').split(';')
+#             return ', '.join(map(lambda x: f"{currency_symbol} {locale.atof(x)/api_url_for_currencies[currency][original_currency]:.2f}", price_value))
+#         if 'amazon' == source_url:
+#             return f"{currency_symbol} {float(value_without_symbol if ',' not in value_without_symbol else value_without_symbol.replace(',', ''))/api_url_for_currencies[currency][original_currency]:.2f}"
 
-def convert_price(price_data: str, source_url: str) -> str | None:
-    original_symbol: str = ''.join([symbol for symbol in price_data if not symbol.isdigit(
-    ) and symbol not in ('.', ',', 'a', 'to')])[:2]
-    original_currency: str = symbols_hash_map[original_symbol]
-    value_without_symbol: str = price_data.replace(original_symbol, '')
-    if remove_currency_from_csv:
-        if 'aliexpress' == source_url:
-            return f'{locale.atof(value_without_symbol)/api_url_for_currencies[currency][original_currency]:.2f}'
-        if 'ebay' == source_url:
-            price_value: list[str] = value_without_symbol.replace(' ', '').replace(
-                'a', ';').replace('to', ';').replace(u'\xa0', '').split(';')
-            return ', '.join(map(lambda x: f"{locale.atof(x)/api_url_for_currencies[currency][original_currency]:.2f}", price_value))
-        if 'amazon' == source_url:
-            return f"{float(value_without_symbol if ',' not in value_without_symbol else value_without_symbol.replace(',', ''))/api_url_for_currencies[currency][original_currency]:.2f}"
-    else:
-        if 'aliexpress' == source_url:
-            return f'{currency_symbol} {locale.atof(value_without_symbol)/api_url_for_currencies[currency][original_currency]:.2f}'
-        if 'ebay' == source_url:
-            price_value: list[str] = value_without_symbol.replace(' ', '').replace(
-                'a', ';').replace('to', ';').replace(u'\xa0', '').split(';')
-            return ', '.join(map(lambda x: f"{currency_symbol} {locale.atof(x)/api_url_for_currencies[currency][original_currency]:.2f}", price_value))
-        if 'amazon' == source_url:
-            return f"{currency_symbol} {float(value_without_symbol if ',' not in value_without_symbol else value_without_symbol.replace(',', ''))/api_url_for_currencies[currency][original_currency]:.2f}"
+
+def convert_price(price_data: str, source_url: str) -> str:
+    try:
+        price_data = price_data.replace(u'\xa0', ' ').strip()
+        # Extract symbol, handling spaces
+        original_symbol = ''.join(c for c in price_data.split(
+        )[0] if not c.isdigit() and c not in ('.', ',')).strip()
+        if not original_symbol:
+            original_symbol = '$'
+        original_currency = symbols_hash_map.get(original_symbol, 'usd')
+        if 'to' in price_data.lower():
+            price_parts = price_data.split('to')[0]
+        else:
+            price_parts = price_data
+        numeric_part = ''.join(
+            c for c in price_parts if c.isdigit() or c == '.')
+        amount = float(numeric_part) if numeric_part else 0.0
+        converted_amount = amount / \
+            api_url_for_currencies[currency][original_currency]
+        return f'{converted_amount:.2f}' if remove_currency_from_csv else f'{currency_symbol} {converted_amount:.2f}'
+    except Exception as e:
+        logging.warning(f"Price conversion failed for '{price_data}': {e}")
+        return '0.00'
 
 
 def parse_amazon(target_url) -> list[dict]:
@@ -82,28 +102,26 @@ def parse_amazon(target_url) -> list[dict]:
             logging.warning(f"Skipping item due to missing data: {e}")
     return data
 
+# def parse_aliexpress(soup: BeautifulSoup) -> list[dict]:
+#     # check if the href url from the item has https at the begin
+#     def check_https(href_url:str) -> str:
+#         if href_url.startswith('https:'):
+#             return href_url
+#         return f'https:{href_url}'
 
-def parse_aliexpress(soup: BeautifulSoup) -> list[dict]:
-    # check if the href url from the item has https at the begin
-    def check_https(href_url: str) -> str:
-        if href_url.startswith('https:'):
-            return href_url
-        return f'https:{href_url}'
-
-    data: list = []
-    items = soup.find_all(
-        'div', class_='list--gallery--C2f2tvm search-item-card-wrapper-gallery')
-    for item in items:
-        try:
-            item_data = {
-                'Name': item.find('h3', class_='multi--titleText--nXeOvyr').text.strip(),
-                'Price': convert_price(item.find('div', class_='multi--price-sale--U-S0jtj').text.strip(), 'aliexpress'),
-                'Link': check_https(item.find('a', href=True)['href'])
-            }
-            data.append(item_data)
-        except AttributeError as e:
-            logging.warning(f"Skipping item due to missing data: {e}")
-    return data
+#     data:list = []
+#     items = soup.find_all('div', class_='list--gallery--C2f2tvm search-item-card-wrapper-gallery')
+#     for item in items:
+#         try:
+#             item_data = {
+#                 'Name': item.find('h3', class_='multi--titleText--nXeOvyr').text.strip(),
+#                 'Price': convert_price(item.find('div', class_='multi--price-sale--U-S0jtj').text.strip(), 'aliexpress'),
+#                 'Link': check_https(item.find('a', href=True)['href'])
+#             }
+#             data.append(item_data)
+#         except AttributeError as e:
+#             logging.warning(f"Skipping item due to missing data: {e}")
+#     return data
 
 
 def parse_ebay(soup: BeautifulSoup) -> list[dict]:
@@ -190,6 +208,42 @@ def save_to_csv(data: list[dict], filename: str = 'output.csv'):
 
     logging.info(f"Data saved to {filename}")
 
+# def pie_graph(data:list[dict], filename:str):
+#     if not data:
+#         logging.warning("No data to create a pie graph.")
+#         return
+
+#     logging.info("Making a pie graph from the data scraped...")
+#     names:list[str] = []
+#     prices:list[float] = []
+#     for item in data:
+#         if ',' in item['Price']:
+#             for value in item['Price'].replace(currency_symbol, '').split(', '):
+#                 names.append(item['Name'])
+#                 prices.append(float(value))
+#         else:
+#             names.append(item['Name'])
+#             prices.append(float(item['Price'].replace(currency_symbol, '')))
+
+#     numpy_prices:np.array = np.array(prices).reshape(-1, 1)
+#     kmeans = KMeans(n_clusters=5, random_state=0).fit(prices)
+#     labels = kmeans.predict(numpy_prices)
+#     # Count the number of data in each cluster
+#     unique_labels, counts = np.unique(labels, return_counts=True)
+#     price_ranges:list[tuple] = [
+#         (int(numpy_prices[labels == label].min()), int(numpy_prices[labels == label].max()))
+#         for label in unique_labels]
+
+#     labels = [f'Around {currency_symbol}{price_min}-{price_max}' for price_min, price_max in price_ranges]
+#     plt.figure(figsize=(12, 9), facecolor='black')
+#     plt.pie(counts, labels=None, autopct='%1.1f%%', startangle=140, textprops={'color': 'black', 'fontsize': 16}, wedgeprops={'edgecolor':'black'})
+#     plt.title(f'Distribuition of prices (in {currency}) for {search_field} (using K-Means)', color='white', size=22)
+#     plt.legend(bbox_to_anchor=(1.2, 1), labels=labels, loc='upper right', fontsize='x-large', labelcolor='white', frameon=True, edgecolor='white', facecolor='none')
+#     plt.tight_layout()
+#     plt.savefig(filename)
+#     logging.info(f"Pie graph saved as {filename}")
+    # return
+
 
 def pie_graph(data: list[dict], filename: str):
     if not data:
@@ -197,8 +251,8 @@ def pie_graph(data: list[dict], filename: str):
         return
 
     logging.info("Making a pie graph from the data scraped...")
-    names: list[str] = []
-    prices: list[float] = []
+    names = []
+    prices = []
     for item in data:
         if ',' in item['Price']:
             for value in item['Price'].replace(currency_symbol, '').split(', '):
@@ -208,15 +262,18 @@ def pie_graph(data: list[dict], filename: str):
             names.append(item['Name'])
             prices.append(float(item['Price'].replace(currency_symbol, '')))
 
-    numpy_prices: np.array = np.array(prices).reshape(-1, 1)
-    kmeans = KMeans(n_clusters=5, random_state=0).fit(prices)
+    # Convert to 2D NumPy array for KMeans
+    # Ensure 2D shape: [[139.], [169.], ...]
+    numpy_prices = np.array(prices).reshape(-1, 1)
+    kmeans = KMeans(n_clusters=5, random_state=0).fit(
+        numpy_prices)  # Fit on 2D array
     labels = kmeans.predict(numpy_prices)
-    # Count the number of data in each cluster
     unique_labels, counts = np.unique(labels, return_counts=True)
-    price_ranges: list[tuple] = [
+    price_ranges = [
         (int(numpy_prices[labels == label].min()),
          int(numpy_prices[labels == label].max()))
-        for label in unique_labels]
+        for label in unique_labels
+    ]
 
     labels = [
         f'Around {currency_symbol}{price_min}-{price_max}' for price_min, price_max in price_ranges]
@@ -224,13 +281,12 @@ def pie_graph(data: list[dict], filename: str):
     plt.pie(counts, labels=None, autopct='%1.1f%%', startangle=140, textprops={
             'color': 'black', 'fontsize': 16}, wedgeprops={'edgecolor': 'black'})
     plt.title(
-        f'Distribuition of prices (in {currency}) for {search_field} (using K-Means)', color='white', size=22)
+        f'Distribution of prices (in {currency}) for {search_field} (using K-Means)', color='white', size=22)
     plt.legend(bbox_to_anchor=(1.2, 1), labels=labels, loc='upper right', fontsize='x-large',
                labelcolor='white', frameon=True, edgecolor='white', facecolor='none')
     plt.tight_layout()
     plt.savefig(filename)
     logging.info(f"Pie graph saved as {filename}")
-    return
 
 
 if __name__ == "__main__":
@@ -279,7 +335,7 @@ if __name__ == "__main__":
 
     urls_to_scrape: list[str] = [
         f'https://amazon.com/s?k={search_field}&s=exact-aware-popularity-rank',
-        f'https://aliexpress.com/w/wholesale-{search_field}.html?sortType=total_tranpro_desc',
+        # f'https://aliexpress.com/w/wholesale-{search_field}.html?sortType=total_tranpro_desc',
         f'https://ebay.com/sch/i.html?_nkw={search_field}'
     ]  # Target websites | aliexpress, amazon and ebay |
 
