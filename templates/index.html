@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Web Scraper</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: auto; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; }
+        input, select { width: 100%; padding: 8px; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Web Scraper</h1>
+        <p>Scrape product data from Amazon and eBay</p>
+        
+        <form method="post" action="/scrape">
+            <div class="form-group">
+                <label for="product_name">Product Name</label>
+                <input type="text" id="product_name" name="product_name" placeholder="e.g., laptop" required>
+            </div>
+            <div class="form-group">
+                <label for="currency">Currency</label>
+                <select id="currency" name="currency">
+                    {% for curr in currencies %}
+                        <option value="{{ curr }}" {% if curr == 'usd' %}selected{% endif %}>{{ curr }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="keep_symbol" value="true"> Keep Currency Symbol
+                </label>
+            </div>
+            <div class="form-group">
+                <label for="pages">Pages</label>
+                <input type="text" id="pages" name="pages" value="3">
+            </div>
+            <button type="submit">Scrape</button>
+        </form>
+
+        {% if status %}
+            <div class="result">
+                <h3>Status: {{ status }}</h3>
+                {% if csv_file %}
+                    <p><a href="/download/{{ csv_file }}" download>Download CSV</a></p>
+                {% endif %}
+                {% if graph_file %}
+                    <p><a href="/download/{{ graph_file }}" download>Download Graph</a></p>
+                    <img src="/output/{{ graph_file }}" alt="Price Distribution" style="max-width: 100%;">
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>

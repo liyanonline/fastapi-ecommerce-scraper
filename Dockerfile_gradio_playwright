@@ -1,0 +1,62 @@
+# Use an official Python base image
+FROM python:3.12-bookworm
+
+# Set working directory
+WORKDIR /usr/src/app
+
+# Install system dependencies for Playwright
+RUN apt-get update && apt-get install -y \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libatspi2.0-0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libdrm2 \
+    libxkbcommon0 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    libglib2.0-0 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Playwright Python package
+RUN pip install playwright==1.51.0
+
+# Set a writable directory for Playwright browsers
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/src/app/playwright_browsers
+
+# Install Playwright browsers explicitly
+RUN python -m playwright install
+
+# Create a directory for output files and set permissions
+RUN mkdir -p /usr/src/app/output && chmod -R 777 /usr/src/app/output
+
+# Copy application files
+COPY . .
+
+# Install remaining Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Gradio separately (if not in requirements.txt)
+RUN pip install --no-cache-dir gradio
+
+# Set Matplotlib config directory to a writable location
+ENV MPLCONFIGDIR=/usr/src/app/matplotlib_cache
+
+# Create the Matplotlib cache directory
+RUN mkdir -p /usr/src/app/matplotlib_cache && chmod -R 777 /usr/src/app/matplotlib_cache
+
+# Expose port for Gradio
+EXPOSE 7860
+
+# Allow Gradio to listen on all interfaces
+ENV GRADIO_SERVER_NAME="0.0.0.0"
+
+# Run the app
+CMD ["python", "app.py"]
