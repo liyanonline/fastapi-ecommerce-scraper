@@ -12,8 +12,13 @@ import matplotlib.pyplot as plt
 from fastapi import FastAPI, Query
 from pydantic import BaseModel
 from typing import List, Dict, Optional
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+import io
+import base64
+
+
 
 
 # ------------------ Setup ------------------
@@ -204,30 +209,71 @@ def save_to_csv(data: List[Dict], filename: str = 'output.csv'):
         writer.writerows(data)
 
 
-def pie_graph(data: List[Dict], filename: str):
+
+def pie_graph_base64(data: list) -> str | None:
     if not data:
-        return
+        return None
     prices = []
     for item in data:
         if ',' in item['Price']:
             prices.extend([float(v) for v in item['Price'].split(', ')])
         else:
-            prices.append(float(item['Price']))
+            try:
+                prices.append(float(item['Price']))
+            except ValueError:
+                continue
+
+    if not prices:
+        return None
 
     numpy_prices = np.array(prices).reshape(-1, 1)
-    kmeans = KMeans(n_clusters=5, random_state=0).fit(numpy_prices)
+    n_clusters = min(5, len(numpy_prices))
+    if n_clusters == 0:
+        return None
+
+    kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(numpy_prices)
     labels = kmeans.predict(numpy_prices)
-
     unique_labels, counts = np.unique(labels, return_counts=True)
-    price_ranges = [(int(numpy_prices[labels == l].min()), int(
-        numpy_prices[labels == l].max())) for l in unique_labels]
+    price_ranges = [(int(numpy_prices[labels == l].min()), int(numpy_prices[labels == l].max()))
+                    for l in unique_labels]
+    label_names = [f'Around {currency_symbol}{low}-{high}' for low, high in price_ranges]
 
-    label_names = [
-        f'Around {currency_symbol}{low}-{high}' for low, high in price_ranges]
-    plt.figure(figsize=(10, 8))
-    plt.pie(counts, autopct='%1.1f%%')
-    plt.legend(label_names, loc='upper right')
-    plt.savefig(filename)
+    plt.figure(figsize=(8, 6))
+    plt.pie(counts, labels=label_names, autopct='%1.1f%%')
+    plt.tight_layout()
+
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format='png')
+    plt.close()
+    buffer.seek(0)
+    img_base64 = base64.b64encode(buffer.read()).decode('utf-8')
+    return f"data:image/png;base64,{img_base64}"
+
+
+# def pie_graph(data: List[Dict], filename: str):
+#     if not data:
+#         return
+#     prices = []
+#     for item in data:
+#         if ',' in item['Price']:
+#             prices.extend([float(v) for v in item['Price'].split(', ')])
+#         else:
+#             prices.append(float(item['Price']))
+
+#     numpy_prices = np.array(prices).reshape(-1, 1)
+#     kmeans = KMeans(n_clusters=5, random_state=0).fit(numpy_prices)
+#     labels = kmeans.predict(numpy_prices)
+
+#     unique_labels, counts = np.unique(labels, return_counts=True)
+#     price_ranges = [(int(numpy_prices[labels == l].min()), int(
+#         numpy_prices[labels == l].max())) for l in unique_labels]
+
+#     label_names = [
+#         f'Around {currency_symbol}{low}-{high}' for low, high in price_ranges]
+#     plt.figure(figsize=(10, 8))
+#     plt.pie(counts, autopct='%1.1f%%')
+#     plt.legend(label_names, loc='upper right')
+#     plt.savefig(filename)
 
 
 # ------------------ FastAPI ------------------
@@ -265,6 +311,7 @@ class ScrapeRequest(BaseModel):
     pages: int = 3
 
 
+
 @app.post("/scrape/")
 def scrape(request: ScrapeRequest):
     global currency, currency_symbol, remove_currency_from_csv, api_url_for_currencies
@@ -273,8 +320,7 @@ def scrape(request: ScrapeRequest):
     if currency not in symbols_hash_map.values():
         return {"error": "Unsupported currency"}
 
-    currency_symbol = [k for k, v in symbols_hash_map.items()
-                       if v == currency][0]
+    currency_symbol = [k for k, v in symbols_hash_map.items() if v == currency][0]
     remove_currency_from_csv = request.remove_currency
 
     api_url_for_currencies = requests.get(
@@ -292,17 +338,53 @@ def scrape(request: ScrapeRequest):
         all_scraped_data.extend(scraped)
 
     save_to_csv(all_scraped_data, 'scraped_data.csv')
-    pie_graph(all_scraped_data, 'scraped_data_graph.png')
+    graph_base64 = pie_graph_base64(all_scraped_data)
 
     return {
         "items_found": len(all_scraped_data),
         "csv_file": "scraped_data.csv",
-        "graph_file": "scraped_data_graph.png",
+        "graph_base64": graph_base64,
         "data_preview": all_scraped_data[:5]
     }
 
+# @app.post("/scrape/")
+# def scrape(request: ScrapeRequest):
+#     global currency, currency_symbol, remove_currency_from_csv, api_url_for_currencies
 
-from fastapi.responses import FileResponse
+#     currency = request.currency.lower()
+#     if currency not in symbols_hash_map.values():
+#         return {"error": "Unsupported currency"}
+
+#     currency_symbol = [k for k, v in symbols_hash_map.items()
+#                        if v == currency][0]
+#     remove_currency_from_csv = request.remove_currency
+
+#     api_url_for_currencies = requests.get(
+#         f'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/{currency}.json'
+#     ).json()
+
+#     urls_to_scrape = [
+#         f'https://amazon.com/s?k={request.search_field}&s=exact-aware-popularity-rank',
+#         f'https://ebay.com/sch/i.html?_nkw={request.search_field}'
+#     ]
+
+#     all_scraped_data = []
+#     for url in urls_to_scrape:
+#         scraped = scrape_website(url, pages=request.pages)
+#         all_scraped_data.extend(scraped)
+
+#     save_to_csv(all_scraped_data, 'scraped_data.csv')
+#     pie_graph(all_scraped_data, 'scraped_data_graph.png')
+
+#     return {
+#         "items_found": len(all_scraped_data),
+#         "csv_file": "scraped_data.csv",
+#         "graph_file": "scraped_data_graph.png",
+#         "data_preview": all_scraped_data[:5]
+#     }
+
+
+
 
 @app.get("/download/csv")
 def download_csv():
