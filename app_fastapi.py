@@ -148,6 +148,23 @@ def pie_graph_base64(data: List[Dict]) -> str:
 # ------------------ FastAPI ------------------
 app = FastAPI()
 
+# Allow your frontend domain
+origins = [
+    "https://babyshare.vercel.app",
+    "http://localhost:3000",  # for local testing
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,          # domains allowed
+    allow_credentials=True,
+    allow_methods=["*"],            # GET, POST, etc.
+    allow_headers=["*"],            # headers like Content-Type
+)
+
+app.mount("/files", StaticFiles(directory="."), name="files")
+
+
 class ScrapeRequest(BaseModel):
     search_field: str
     currency: str = "usd"
