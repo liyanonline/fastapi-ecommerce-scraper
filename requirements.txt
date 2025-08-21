@@ -1,13 +1,23 @@
-# for app_gradio.py
-gradio
+fastapi
+uvicorn
+playwright
 requests
 beautifulsoup4
-playwright==1.51.0
 numpy
 scikit-learn
 matplotlib
+pydantic
 
-# for app_fastapi.py
-fastapi 
-uvicorn
-jinja2
+# # for app_gradio.py
+# gradio
+# requests
+# beautifulsoup4
+# playwright==1.51.0
+# numpy
+# scikit-learn
+# matplotlib
+
+# # for app_fastapi.py
+# fastapi 
+# uvicorn
+# jinja2
